@@ -1,0 +1,66 @@
+name: PR check
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  conventional-commit:
+    name: Conventional commit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate commit messages
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          PATTERN='^(bug|build|chore|ci|docs|feat|fix|infra|perf|refactor|style|test)(\([a-zA-Z0-9_./-]+\))?!?: .+$'
+
+          FAILED=0
+          while IFS= read -r SHA; do
+            MESSAGE="$(git log -1 --format=%s "$SHA")"
+            if ! printf '%s' "$MESSAGE" | grep -qP "$PATTERN"; then
+              echo "::error::Commit $SHA ('$MESSAGE') is not a Conventional Commit: '<type>(<scope>)?!?: <description>', type one of bug, build, chore, ci, docs, feat, fix, infra, perf, refactor, style, test."
+              FAILED=1
+            fi
+          done < <(git rev-list --no-merges "$BASE_SHA..$HEAD_SHA")
+
+          exit $FAILED
+
+  format:
+    name: Format
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Verify formatting matches .editorconfig
+        run: dotnet format Foundation.slnx --verify-no-changes
+
+  packages:
+    name: Build and test
+    strategy:
+      fail-fast: false
+      matrix:
+        package-name: [Core, AspNetCore, Telemetry, EntityFrameworkCore.Postgres]
+    uses: ./.github/workflows/package-pipeline.yml
+    with:
+      package-name: ${{ matrix.package-name }}
+      base-sha: ${{ github.event.pull_request.base.sha }}
+      head-sha: ${{ github.event.pull_request.head.sha }}
+      publish: false
+      collect-coverage: true

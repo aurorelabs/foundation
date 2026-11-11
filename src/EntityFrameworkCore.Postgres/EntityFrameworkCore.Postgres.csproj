@@ -1,0 +1,27 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Version>$(EntityFrameworkCorePostgresVersion)</Version>
+    <AssemblyName>Aurore.Foundation.EntityFrameworkCore.Postgres</AssemblyName>
+    <RootNamespace>Aurore.Foundation.EntityFrameworkCore.Postgres</RootNamespace>
+    <Product>Aurore Foundation @ EntityFrameworkCore.Postgres</Product>
+    <Description>Entity Framework Core on PostgreSQL for aurore projects: conventions, interceptors, paging and health check.</Description>
+    <PackageTags>aurore entityframeworkcore efcore postgres npgsql soft-delete pagination</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="11.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="11.0.0-rc.3.26522.148" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="11.0.0-rc.3.26522.148" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="11.0.0-rc.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Core\Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Tests.EntityFrameworkCore.Postgres" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,37 @@
+using System;
+
+namespace Aurore.Foundation.Core.Extensions;
+
+/// <summary>Helpers for turning text into enum values.</summary>
+public static class EnumExtensions
+{
+    /// <summary>
+    /// Case-insensitive. Throws on unknown values (including numbers that map to no member), so a configuration
+    /// typo fails at startup instead of silently becoming the enum's first member.
+    /// </summary>
+    public static TEnum ParseEnum<TEnum>(this string? value)
+        where TEnum : struct, Enum
+    {
+        if (TryParseDefined<TEnum>(value, out var result))
+            return result;
+
+        throw new InvalidOperationException(
+            $"'{value}' is not a valid {typeof(TEnum).Name} value. Expected one of: {string.Join(", ", Enum.GetNames<TEnum>())}.");
+    }
+
+    /// <summary>Case-insensitive parse that returns the fallback for unknown values instead of throwing.</summary>
+    /// <param name="value">The text to parse; the name of a member, in any casing.</param>
+    /// <param name="fallback">The value returned when the text is not a member.</param>
+    /// <returns>The member, or the fallback.</returns>
+    public static TEnum ParseEnumOrDefault<TEnum>(this string? value, TEnum fallback)
+        where TEnum : struct, Enum
+    {
+        return TryParseDefined<TEnum>(value, out var result) ? result : fallback;
+    }
+
+    private static bool TryParseDefined<TEnum>(string? value, out TEnum result)
+        where TEnum : struct, Enum
+    {
+        return Enum.TryParse(value, ignoreCase: true, out result) && Enum.IsDefined(result);
+    }
+}

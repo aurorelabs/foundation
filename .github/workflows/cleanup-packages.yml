@@ -1,0 +1,83 @@
+name: Cleanup old package versions
+
+# Deletes package versions for real unless dry-run is on.
+on:
+  workflow_dispatch:
+    inputs:
+      keep-count:
+        description: Versions to keep per package, per channel (stable and preview counted separately)
+        required: false
+        default: "10"
+        type: string
+      dry-run:
+        description: List what would be deleted without deleting it
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  packages: write
+
+jobs:
+  cleanup:
+    strategy:
+      fail-fast: false
+      matrix:
+        package-id:
+          - Aurore.Foundation.Core
+          - Aurore.Foundation.AspNetCore
+          - Aurore.Foundation.Telemetry
+          - Aurore.Foundation.EntityFrameworkCore.Postgres
+    runs-on: ubuntu-latest
+    env:
+      OWNER: aurorelabs
+      TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Delete old versions
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          PACKAGE_ID="${{ matrix.package-id }}"
+          KEEP="${{ inputs.keep-count }}"
+          DRY_RUN="${{ inputs.dry-run }}"
+          API="https://api.github.com/orgs/$OWNER/packages/nuget/$PACKAGE_ID/versions"
+
+          PAGES_FILE="$(mktemp)"
+          PAGE=1
+          while :; do
+            RESPONSE="$(curl -sf \
+              -H "Authorization: Bearer $TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "$API?per_page=100&page=$PAGE" || echo "[]")"
+            COUNT="$(echo "$RESPONSE" | jq 'length')"
+            [ "$COUNT" -eq 0 ] && break
+            echo "$RESPONSE" >> "$PAGES_FILE"
+            [ "$COUNT" -lt 100 ] && break
+            PAGE=$((PAGE + 1))
+          done
+
+          ALL="$(jq -s 'add // []' "$PAGES_FILE")"
+
+          REMOVE="$(echo "$ALL" | jq -r --argjson keep "$KEEP" '
+            ([.[] | select(.name | contains("-") | not)] | sort_by(.created_at) | reverse | .[$keep:]) +
+            ([.[] | select(.name | contains("-"))] | sort_by(.created_at) | reverse | .[$keep:])
+            | .[] | "\(.id) \(.name)"')"
+
+          while IFS= read -r LINE; do
+            [ -z "$LINE" ] && continue
+            VERSION_ID="${LINE%% *}"
+            VERSION_NAME="${LINE#* }"
+
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "Would delete $PACKAGE_ID $VERSION_NAME" >> "$GITHUB_STEP_SUMMARY"
+            else
+              curl -sf -X DELETE \
+                -H "Authorization: Bearer $TOKEN" \
+                -H "Accept: application/vnd.github+json" \
+                -H "X-GitHub-Api-Version: 2022-11-28" \
+                "$API/$VERSION_ID"
+              echo "Deleted $PACKAGE_ID $VERSION_NAME" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done <<< "$REMOVE"

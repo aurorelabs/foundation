@@ -1,0 +1,93 @@
+name: Publish
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      skip-version-sync:
+        description: Bypass the "src and Versions.props change together" check for this run (a one-off fix, for example a version corrected after the fact)
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  packages:
+    name: Build, test and publish
+    strategy:
+      fail-fast: false
+      matrix:
+        package-name: [Core, AspNetCore, Telemetry, EntityFrameworkCore.Postgres]
+    uses: ./.github/workflows/package-pipeline.yml
+    with:
+      package-name: ${{ matrix.package-name }}
+      base-sha: ${{ github.event.before }}
+      head-sha: ${{ github.sha }}
+      skip-version-sync: ${{ inputs.skip-version-sync || false }}
+
+  release:
+    name: Release
+    needs: packages
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download the published records
+        uses: actions/download-artifact@v4
+        with:
+          pattern: published-*
+          path: published
+          merge-multiple: true
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          if ! ls published/*.txt >/dev/null 2>&1; then
+            echo "Nothing was published in this run, no release." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          LIST=""
+          ALL_PRERELEASE=true
+          while read -r NAME VERSION; do
+            LIST="${LIST}${NAME} v${VERSION}, "
+            case "$VERSION" in *-*) ;; *) ALL_PRERELEASE=false ;; esac
+          done < <(cat published/*.txt)
+          LIST="${LIST%, }"
+
+          TAG="release-$(git rev-parse --short HEAD)"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists, skipping."
+            exit 0
+          fi
+
+          NOTES="$(awk '/^## \[Unreleased\]/{flag=1; next} /^## \[/{if (flag) exit} flag' CHANGELOG.md | sed '/^---$/d')"
+          if [ -z "$(echo "$NOTES" | tr -d '[:space:]')" ]; then
+            NOTES="No entry under **Unreleased** at release time. See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md)."
+          fi
+
+          {
+            echo "$NOTES"
+            echo ""
+            echo "---"
+            echo "Published: $LIST"
+            echo "Commit: ${{ github.sha }}"
+          } > release-notes.md
+
+          FLAGS=()
+          if [ "$ALL_PRERELEASE" = "true" ]; then FLAGS+=(--prerelease); fi
+
+          gh release create "$TAG" --title "Release: $LIST" --notes-file release-notes.md --target "${{ github.sha }}" "${FLAGS[@]}"

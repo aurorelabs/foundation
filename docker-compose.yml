@@ -1,0 +1,17 @@
+services:
+  tests:
+    build:
+      context: .
+      target: test
+    image: aurore-foundation:tests
+    environment:
+      TEST_POSTGRES_HOST: sbx-postgres
+    volumes:
+      - ./artifacts:/src/artifacts
+    networks:
+      - aur-sandbox
+
+networks:
+  aur-sandbox:
+    external: true
+    name: aur-sandbox

@@ -1,0 +1,8 @@
+<Project>
+    <PropertyGroup>
+        <CoreVersion>0.1.0</CoreVersion>
+        <TelemetryVersion>0.1.0</TelemetryVersion>
+        <AspNetCoreVersion>0.1.0</AspNetCoreVersion>
+        <EntityFrameworkCorePostgresVersion>0.1.0</EntityFrameworkCorePostgresVersion>
+    </PropertyGroup>
+</Project>

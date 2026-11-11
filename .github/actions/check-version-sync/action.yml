@@ -1,0 +1,69 @@
+name: Check package/version sync
+description: >
+  Fails unless a change under src/<Package> and a change of its version in Versions.props happen in the same diff.
+  Used by the pull request check and by the publish pipeline, so the rule is defined once.
+
+inputs:
+  package-name:
+    description: Package name, as in the folder src/<name> (for example "Core" or "EntityFrameworkCore.Postgres").
+    required: true
+  base-sha:
+    description: Commit SHA to diff from.
+    required: true
+  head-sha:
+    description: Commit SHA to diff to.
+    required: true
+  skip-check:
+    description: If 'true', always report src-changed=true and skip the validation.
+    required: false
+    default: "false"
+
+outputs:
+  src-changed:
+    description: "'true' if any file under src/<name> changed between base-sha and head-sha."
+    value: ${{ steps.check.outputs.src-changed }}
+  version:
+    description: The version in Versions.props for this package at head-sha.
+    value: ${{ steps.check.outputs.version }}
+
+runs:
+  using: composite
+  steps:
+    - id: check
+      shell: bash
+      env:
+        PACKAGE: ${{ inputs.package-name }}
+        BASE_SHA: ${{ inputs.base-sha }}
+        HEAD_SHA: ${{ inputs.head-sha }}
+        SKIP: ${{ inputs.skip-check }}
+      run: |
+        set -euo pipefail
+
+        PROPERTY="${PACKAGE//./}Version"
+        NEW_VERSION="$(grep -oP "(?<=<$PROPERTY>)[^<]+" Versions.props)"
+        echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+
+        if [ "$SKIP" = "true" ]; then
+          echo "src-changed=true" >> "$GITHUB_OUTPUT"
+          echo "::notice::$PACKAGE: version-sync check bypassed manually."
+          exit 0
+        fi
+
+        ZERO_SHA="0000000000000000000000000000000000000000"
+        EMPTY_TREE="4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+
+        if [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "$ZERO_SHA" ] || ! git cat-file -e "$BASE_SHA" 2>/dev/null; then
+          BASE_SHA="$(git rev-parse "$HEAD_SHA^" 2>/dev/null || echo "$EMPTY_TREE")"
+        fi
+
+        if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- "src/$PACKAGE"; then SRC_CHANGED=false; else SRC_CHANGED=true; fi
+
+        OLD_VERSION="$(git show "$BASE_SHA:Versions.props" 2>/dev/null | grep -oP "(?<=<$PROPERTY>)[^<]+" || true)"
+        if [ "$OLD_VERSION" = "$NEW_VERSION" ]; then VERSION_CHANGED=false; else VERSION_CHANGED=true; fi
+
+        echo "src-changed=$SRC_CHANGED" >> "$GITHUB_OUTPUT"
+
+        if [ "$SRC_CHANGED" != "$VERSION_CHANGED" ]; then
+          echo "::error::$PACKAGE: src/$PACKAGE changed=$SRC_CHANGED but $PROPERTY changed=$VERSION_CHANGED in Versions.props (${OLD_VERSION:-none} -> $NEW_VERSION). They must change together."
+          exit 1
+        fi

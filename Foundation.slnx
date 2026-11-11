@@ -1,0 +1,25 @@
+<Solution>
+  <Folder Name="/0. Root/">
+    <File Path="README.md" />
+    <File Path="CHANGELOG.md" />
+    <File Path=".editorconfig" />
+    <File Path=".gitignore" />
+    <File Path="Directory.Build.props" />
+    <File Path="Versions.props" />
+    <File Path="global.json" />
+    <File Path="Dockerfile" />
+    <File Path="docker-compose.yml" />
+    <File Path=".dockerignore" />
+  </Folder>
+  <Folder Name="/T. Tests/">
+    <Project Path="tests/Tests.AspNetCore/Tests.AspNetCore.csproj" />
+    <Project Path="tests/Tests.Core/Tests.Core.csproj" />
+    <Project Path="tests/Tests.EntityFrameworkCore.Postgres/Tests.EntityFrameworkCore.Postgres.csproj" />
+    <Project Path="tests/Tests.Shared/Tests.Shared.csproj" />
+    <Project Path="tests/Tests.Telemetry/Tests.Telemetry.csproj" />
+  </Folder>
+  <Project Path="src/AspNetCore/AspNetCore.csproj" />
+  <Project Path="src/Core/Core.csproj" />
+  <Project Path="src/EntityFrameworkCore.Postgres/EntityFrameworkCore.Postgres.csproj" />
+  <Project Path="src/Telemetry/Telemetry.csproj" />
+</Solution>
